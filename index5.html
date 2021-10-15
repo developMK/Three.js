@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Object -> 3D Object Rendering_2</title> 
+    <canvas id="scene"></canvas>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/2.0.2/TweenMax.min.js"></script>
+    <style>
+        body{
+            margin:0;
+            overflow:hidden;
+        }
+        canvas{
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        console.log();
+
+        // DOM에서 캔버스 요소 가져오기
+        const canvas = document.getElementById("scene");
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        //2D 컨텍스트 저장
+        const ctx = canvas.getContext("2d");
+
+        if (window.devicePixelRatio > 1){
+            canvas.width = canvas.clientWidth * 2;
+            canvas.height = canvas.clientHeight * 2;
+            ctx.scale(2, 2);
+        }
+
+        function getTexture(emoji){
+            const tempCanvas = document.createElement("canvas");
+            const tempCtx = tempCanvas.getContext("2d");
+            tempCanvas.width = 60;
+            tempCanvas.height = 60;
+            tempCtx.textAlign = 'center';
+            tempCtx.textBaseline = 'middle';
+            tempCtx.font = '54px serif';
+            tempCtx.fillText(emoji, 30,35);
+            return tempCanvas;
+        }
+        const textures = [getTexture('🦊'), getTexture('🦓'), getTexture('🐹'), getTexture('🐨')];
+
+        /* ====================== */
+        /* ====== VARIABLES ===== */
+        /* ====================== */
+        let width = canvas.offsetWidth;// 캔버스의 너비
+        let height = canvas.offsetHeight;// 캔버스의 높이
+        const dots = [];// 배열의 모든 점
+
+        /* ====================== */
+        /* ====== CONSTANTS ===== */
+        /* ====================== */
+        // 이러한 상수 중 일부는 사용자가 화면 크기를 조정하면 변경될 수 있지만 여전히 변수의 상수 부분에 속한다고 강력히 믿습니다. 
+        let DOTS_AMOUNT = Math.min(width, height);// 화면의 점 갯수
+        const DOT_RADIUS = 20;// 점의 반경
+        let PROJECTION_CENTER_X = width / 2; // 캔버스 HTML의 X 중심
+        let PROJECTION_CENTER_Y = height / 2; // 캔버스 HTML의 Y 중심
+        let PERSPECTIVE = width * 0.8; 
+        let GLOBE_RADIUS = Math.min(width, height) * 0.4;
+
+        class Dot{
+            constructor(){
+                this.theta = Math.random() * 2 * Math.PI;// [0, 2Pi] 사이의 임의 값
+                
+                this.phi = Math.acos((Math.random() * 2) -1);// [0, Pi] 사이의 임의 값
+
+                this.texture = textures[Math.floor(Math.random() * textures.length)];
+
+                // 지구를 따라 점의 [x, y, z] 좌표를 계산합니다.
+                this.x = 0;
+                this.y = 0;
+                this.z = 0;
+
+                this.radius = Math.random() * (GLOBE_RADIUS * 0.2) + (GLOBE_RADIUS * 0.8);
+
+                this.xProjected  = 0;
+                this.yProjected  = 0;
+                this.scaleProjected  = 0;
+
+                TweenMax.to(this, 40,{
+                    theta: this.theta + Math.PI * 2, 
+                    repeat: -1,
+                    ease: Power0.easeNone
+                });
+            }
+            //  3D 위치를 2D 캔버스에 투영하기 위해 약간의 수학을 수행하십시오. 
+            project(){
+                this.x = this.radius * Math.sin(this.phi) * Math.cos(this.theta);
+                this.y = this.radius * Math.cos(this.phi);
+                this.z = this.radius * Math.sin(this.phi) * Math.sin(this.theta) + this.radius;
+
+                this.scaleProjected = PERSPECTIVE / (PERSPECTIVE + this.z);
+                this.xProjected = (this.x * this.scaleProjected) + PROJECTION_CENTER_X;
+                this.yProjected = (this.y * this.scaleProjected) + PROJECTION_CENTER_Y;
+            }
+            // Draw the dot on the canvas
+            draw(){
+                ctx.drawImage(this.texture, this.xProjected - DOT_RADIUS, this.yProjected - DOT_RADIUS, DOT_RADIUS * 2 * this.scaleProjected, DOT_RADIUS * 2 * this.scaleProjected)
+            }
+        }
+        function createDots(){
+            // 점 배열 비우기
+            dots.length = 0;
+
+            // 필요한 양에 따라 새 점 만들기
+            for(let i = 0; i < DOTS_AMOUNT; i++){
+                // 새 점을 만들고 배열에 푸시하기
+                dots.push(new Dot());
+            }
+        }
+        /* ====================== */
+        /* ======== 렌더링 하기 ====== */
+        /* ====================== */
+        function render(){
+            // 장면지우기
+            ctx.clearRect(0,0,width, height);
+
+            // 점 배열에 반복하고 모든 점을 투영한다.
+            for(var i=0; i<dots.length; i++){
+                dots[i].project();
+            }
+
+            // 투영된 크기에 따라 점 배열 정렬
+            dots.sort((dot1,dot2)=>{
+                return dot1.scaleProjected - dot2.scaleProjected;
+            });
+
+            // 점 배열을 반복하고 모든 점을 그린다. 
+            for(var i = 0; i< dots.length; i++){
+                dots[i].draw();
+            }
+            window.requestAnimationFrame(render);
+        }
+
+        // 사용자가 화면 크기를 조정한 후 호출되는 함수
+        function afterResize(){
+            width = canvas.offsetWidth;
+            height = canvas.offsetHeight;
+            if(window.devicePixelRatio > 1){
+                canvas.width = canvas.clientWidth * 2;
+                canvas.height = canvas.clientHeight * 2;
+                ctx.scale(2,2);
+            }else{
+                canvas.width = width;
+                canvas.height = height;
+            }
+            PROJECTION_CENTER_X = width / 2;
+            PROJECTION_CENTER_Y = height / 2;
+            PERSPECTIVE = width * 0.8;
+            GLOBE_RADIUS = Math.min(width, height) *0.4;
+            DOTS_AMOUNT = Math.min(width, height);
+
+            createDots();// 모든 점 재설정
+        }
+        //  사용자가 화면 크기를 조정할 때 시간 초과를 저장하는데 사용되는 변수
+        let resizeTimeout;
+        // 사용자가 화면 크기를 조정한 직후에 호출되는 함수
+        function onResize(){
+            // 시간초과 변수 지우기
+            resizeTimeout = window.clearTimeout(resizeTimeout);
+            // 호출하지 않도록 새 시간 초과 저장크기 조정 이벤트마다 크기 조정
+            resizeTimeout = window.setTimeout(afterResize,500);
+        }
+        window.addEventListener('resize', onResize);
+
+        // 점 배열을 임의의 점으로 채우기
+        createDots();
+
+        // 장면 랜더링
+        window.requestAnimationFrame(render);
+    </script>
+</body>
+</html>

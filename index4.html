@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>javascript 2D object -> 3D object rendering</title>
+    <canvas id="scene"></canvas>
+    <style>
+        body{ 
+            display: flex; 
+            margin: 0;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        canvas{ 
+            width: 98vmin;
+            height: 98vmin;
+        }
+    </style>
+</head>
+<body>
+    
+    <script>
+        console.clear();
+        
+        //돔에서 캔버스 요소 가져오기
+        const canvas = document.querySelector("#scene");
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+
+        //2D 컨텍스트 저장
+        const ctx = canvas.getContext("2d");
+
+        if(window.devicePixelRatio >1){
+            canvas.width=canvas.clientWidth * 2;
+            canvas.height = canvas.clientHeight * 2;
+            ctx.scale(2,2);
+        }
+
+        // ===============================
+        // ============변관성============
+        // ===============================
+
+        let width = canvas.clientWidth; // 캔버스 너비
+        let height = canvas.clientHeight // 캔버스 높이
+        let rotation = 0; // 지구의 회전
+        let dots = []; // 배열의 모든 점
+
+        // ===============================
+        // ============상수============
+        // ===============================
+        // 이러한 상수 중 일부는 사용자가 화면 크기를 조정하면 변경될 수 있지만 여전히 변수의 상수 부분에 속한다고 강력히 믿는다. 
+
+        const DOTS_AMOUNT = 1000; // 화면의 점의 갯수
+        const DOT_RADIUS = 4; // 점의 반경
+        let GLOBE_RADIUS = width * 0.7; // 지구 반경
+        let GLOBE_CENTER_Z = -GLOBE_RADIUS; // 지구 중심의 z값
+        let PROJECTION_CENTER_X = width / 2; // 캔버스 HTML의 X 중심
+        let PROJECTION_CENTER_Y = height / 2; // 캔버스 HTML의 Y 중심
+        let FIELD_OF_VIEW = width * 0.8;
+
+        class Dot{
+            constructor(x,y,z){
+                this.x = x;
+                this.y = y;
+                this.z = z;
+
+                this.xProject = 0;
+                this.yProject = 0;
+                this.sizeProjection = 0;
+            }
+            // 3D 위치를 2D 캔버스에 투영하기 위해 약간의 수학을 수행하십시오. 
+            project(sin, cos){
+                const rotX = cos * this.x + sin * (this.z - GLOBE_CENTER_Z);
+                const rotZ = -sin * this.x +cos * (this.z - GLOBE_CENTER_Z) + GLOBE_CENTER_Z;
+                this.sizeProjection = FIELD_OF_VIEW / (FIELD_OF_VIEW - rotZ);
+                this.xProject = (rotX * this.sizeProjection) + PROJECTION_CENTER_X;
+                this.yProject = (this.y * this.sizeProjection) + PROJECTION_CENTER_Y;
+            }
+            //캔버스의 점을 그린다.
+            draw(sin,cos){
+                this.project(sin,cos);
+                //ctx.fillRect(this.xProject - DOT_RADIUS, this.yProject - DOT_RADIUS, DOT_RADIUS * 2 * this.sizeProjection, DOT_RADIUS * 2 * this.sizeProjection);
+                ctx.beginPath();
+                ctx.arc(this.xProject, this.yProject, DOT_RADIUS * this.sizeProjection, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function createDots(){
+            // 점 배열 비우기
+            dots.length = 0;
+
+            // 필요한 양에 따라 새 점 만들기
+            for (let i = 0; i < DOTS_AMOUNT; i++){
+                const theta = Math.random() * 2 * Math.PI;//[0, 2PI] 사이의 임의 값
+                const phi = Math.acos((Math.random() * 2) -1); // [-1, 1] 사이의 임의 값
+
+                // 지구를 따라 점의 [X,Y,Z]좌표를 계산한다.
+                const x = GLOBE_RADIUS * Math.sin(phi) * Math.cos(theta);
+                const y = GLOBE_RADIUS * Math.sin(phi) * Math.sin(theta);
+                const z = (GLOBE_RADIUS * Math.cos(phi)) + GLOBE_CENTER_Z;
+                dots.push(new Dot(x,y,z));
+            }
+        }
+
+        // ===============================
+        // ===========렌더링하다============
+        // ===============================
+        function render(a){
+            // 장면 지우기
+            ctx.clearRect(0,0, width, height);
+
+            // 지구의 공회전 증가
+            rotation = a * 0.0004;
+
+            const sineRotation = Math.sin(rotation);// 회전 사인
+            const cosineRotation = Math.cos(rotation);// 회전 코사인
+
+            // 점 배열을 반복하고 모든 점을 그린다.
+            for (var i = 0; i< dots.length; i++){
+                dots[i].draw(sineRotation, cosineRotation);
+            }
+
+            window.requestAnimationFrame(render);
+        }
+
+        // 사용자가 화면 크기를 조정한 후 호출되는 함수
+        function afterResize(){
+            width = canvas.offsetWidth;
+            height = canvas.offseetHeight;
+            if(window.devicePixelRatio > 1){
+                canvas.width = canvas.clientWidth * 2;
+                canvas.height = canvas.clientHeight * 2;
+                ctx.scale(2,2);
+            }else{
+                canvas.width = width;
+                canvas.height = height;
+            }
+            GLOBE_RADIUS = width * 0.7;
+            GLOBE_CENTER_Z = -GLOBE_RADIUS;
+            PROJECTION_CENTER_X = width / 2; 
+            PROJECTION_CENTER_Y = height / 2;
+            FIELD_OF_VIEW = width * 0.8;
+
+            createDots();// 모든 점 재설정
+        }
+
+        // 사용자가 화면 크기를 조정할 때 시간 초과를 저장하는데 사용되는 변수
+        let resizeTimeout;
+        // 사용자가 화면 크기를 조정한 직후에 호출되는 함수
+        function onResize(){
+            // 시간 초과 변수 지우기
+            resizeTimeout = window.clearTimeout(resizeTimeout);
+            // 호출하지 않도록 새 시간 초과 저장크기 조정 이벤트마다 크기 조정
+            resizeTimeout = window.setTimeout(afterResize, 500);
+        }
+        window.addEventListener('resize',onResize);
+
+        // 점 배열을 임의의 점으로 채우기
+        createDots();
+
+        // 장면 렌더링
+        window.requestAnimationFrame(render);
+    </script>
+</body>
+</html>
